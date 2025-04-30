@@ -27,7 +27,8 @@ function isQualitative(dimension){
   return dimension == "currentVariableCost"
     || dimension == "suggestionVariableCost"
     || dimension == "gcssVariableCost"
-    || dimension== "numberOfFfes";
+    || dimension == "numberOfFfes"
+    || dimension == "currentNrOfTranshipments";
 }
 
 function isQuantitative(dimension){
@@ -39,7 +40,14 @@ function isQuantitative(dimension){
     || dimension == "gcssHasCapacityForShipment"
     || dimension == "suggestionShownInRerouter"
     || dimension == "suggestionUsedInRerouter"
-    || dimension == "suggestionMatchGcssUpdate";
+    || dimension == "suggestionMatchGcssUpdate"
+    || dimension == "deliveryPromise"
+    || dimension == "loadPromise"
+    || dimension == "gcssServiceDeliveryPerformance";
+}
+
+function isDateTime(dimension){
+  return dimension == "lastModificationDateTime";
 }
 
 // Scale chart and canvas height
@@ -100,12 +108,21 @@ d3.csv("raw_data.csv", function(raw_data) {
     data = raw_data.map(function(d) {
       for (var k in d) {
         // Take quantitative values as is
-        if (isQuantitative(k))
-          d[k] = d[k];
+        if (isQuantitative(k)){
+          d[k] = k == "gcssServiceDeliveryPerformance"
+          ? d[k].replace(/.*isDelayed":/, '').replace(/,".*/, '')
+          : d[k]
+        }
+          
           
         // Convert qualitative scales to floats
         if(isQualitative(k))
           d[k] = parseFloat(d[k]) || 0;
+
+        // Transform date values to something usable
+        if(isDateTime(k)){
+          d[k] = Math.floor( (new Date(d[k]).getTime() - Date.now())/ (1000 * 60 * 60 * 24));
+        }
       };
       return d;
     });
@@ -113,17 +130,17 @@ d3.csv("raw_data.csv", function(raw_data) {
   // Extract the list of dimensions we want to keep in the plot.
   dimensions = d3
     .keys(raw_data[0])
-    .filter(function(d) { return isQualitative(d) || isQuantitative(d)})
+    .filter(function(d) { return isQualitative(d) || isQuantitative(d) || isDateTime(d)})
 
   xscale.domain(dimensions.sort())
 
   // For each dim3nsion, build a scale
   dimensions.forEach(function(d) {
-    if( isQualitative(d) ){
+    if( isQualitative(d) || isDateTime(d)){
       yscale[d] = d3.scale.linear()
         .domain( d3.extent(data, function(p) { return p[d]; }) )
         .range([h, 0])
-    }else{
+    } else{
       yscale[d] = d3.scale.ordinal()
         .domain(d3.extent(data, function(p) { return p[d]; }) )
         .rangePoints([h, 0], .1)
@@ -255,7 +272,7 @@ function invert_axis(d) {
     var extent = yscale[d].brush.extent();
   }
   if (yscale[d].inverted == true) {
-    if( isQualitative(d) ){
+    if( isQualitative(d) || isDateTime(d) ){
       yscale[d].range([h, 0]);
     }else{
       yscale[d].rangePoints([h, 0], .1)
@@ -268,7 +285,7 @@ function invert_axis(d) {
     yscale[d].inverted = false;
 
   } else {
-    if( isQualitative(d) ){
+    if( isQualitative(d) || isDateTime(d)){
       yscale[d].range([0, h]);
     }else{
       yscale[d].rangePoints([0, h], .1)
@@ -350,7 +367,7 @@ function brush() {
           .style('font-size', '13px')
           .style('display', function() { 
             var value = d3.select(this).data();
-            if( isQualitative(dimension) )
+            if( isQualitative(dimension) || isDateTime(dimension))
               return extent[0] <= value && value <= extent[1] ? null : "none"
             else
               return extent[0] <= yscale[dimension](value[0]) && yscale[dimension](value[0]) <= extent[1] ? null : "none"
@@ -380,7 +397,7 @@ function brush() {
   data
     .map(function(d) {
       return actives.every(function(p, dimension) {
-        if( isQualitative(p) )
+        if( isQualitative(p) || isDateTime(p))
           return extents[dimension][0] <= d[p] && d[p] <= extents[dimension][1];
         else{
           return extents[dimension][0] <= yscale[p](d[p]) && yscale[p](d[p]) <= extents[dimension][1]
@@ -469,26 +486,26 @@ function rescale() {
   dimensions.forEach(function(d,i) {
     
     if (yscale[d].inverted) {
-      if( isQualitative(d) ){
+      if( isQualitative(d) || isDateTime(d)){
         yscale[d] = d3.scale.linear()
-        .domain( d3.extent(data, function(p) { return p[d]; }) )
-        .range([0, h])
+          .domain( d3.extent(data, function(p) { return p[d]; }) )
+          .range([0, h])
       }else{
         yscale[d] = d3.scale.ordinal()
-         .domain(d3.extent(data, function(p) { return p[d]; }) )
-         .rangePoints([0, h], .1)
+          .domain(d3.extent(data, function(p) { return p[d]; }) )
+          .rangePoints([0, h], .1)
       }
       yscale[d].inverted = true;
 
     } else {
-      if( isQualitative(d) ){
+      if( isQualitative(d) || isDateTime(d)){
         yscale[d] = d3.scale.linear()
-        .domain( d3.extent(data, function(p) { return p[d]; }) )
-        .range([h, 0])
+          .domain( d3.extent(data, function(p) { return p[d]; }) )
+          .range([h, 0])
       }else{
         yscale[d] = d3.scale.ordinal()
-         .domain(d3.extent(data, function(p) { return p[d]; }) )
-         .rangePoints([h, 0], .1)
+          .domain(d3.extent(data, function(p) { return p[d]; }) )
+          .rangePoints([h, 0], .1)
       }
     }
   });
@@ -543,7 +560,7 @@ window.onresize = function() {
     .rangePoints([0, w], 1)
     .domain(dimensions);
   dimensions.forEach(function(d) {
-    if( isQualitative(d) ){
+    if( isQualitative(d) || isDateTime(d)){
       yscale[d].range([h, 0])
     }else{
       yscale[d].rangePoints([h, 0], .1)
