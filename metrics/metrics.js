@@ -20,8 +20,27 @@ var m = [60, 0, 10, 0],
     dimensions,                           
     legend,
     render_speed = 50,
-    brush_count = 0,
-    excluded_groups = [];
+    brush_count = 0;
+
+// Check dimension names  
+function isQualitative(dimension){
+  return dimension == "currentVariableCost"
+    || dimension == "suggestionVariableCost"
+    || dimension == "gcssVariableCost"
+    || dimension== "numberOfFfes";
+}
+
+function isQuantitative(dimension){
+  return dimension == "sentToGcss" 
+    || dimension == "sentToTpm"
+    || dimension == "scenarioSourceName"
+    || dimension == "issueTypeName"
+    || dimension == "locOrReg" 
+    || dimension == "gcssHasCapacityForShipment"
+    || dimension == "suggestionShownInRerouter"
+    || dimension == "suggestionUsedInRerouter"
+    || dimension == "suggestionMatchGcssUpdate";
+}
 
 // Scale chart and canvas height
 d3.select("#chart")
@@ -80,23 +99,13 @@ d3.csv("raw_data.csv", function(raw_data) {
 
     data = raw_data.map(function(d) {
       for (var k in d) {
-        if (k == "sentToGcss" 
-          || k == "sentToTpm"
-          || k == "scenarioSourceName"
-          || k == "issueTypeName"
-          || k == "locOrReg" 
-          || k == "gcssHasCapacityForShipment"
-          || k == "suggestionShownInRerouter"
-          || k == "suggestionUsedInRerouter"
-          || k == "suggestionMatchGcssUpdate")
+        // Take quantitative values as is
+        if (isQuantitative(k))
           d[k] = d[k];
           
-          // Convert quantitative scales to floats
-          if(k == "currentVariableCost"
-            || k == "suggestionVariableCost"
-            || k == "gcssVariableCost"
-            || k == "numberOfFfes")
-            d[k] = parseFloat(d[k]) || 0;
+        // Convert qualitative scales to floats
+        if(isQualitative(k))
+          d[k] = parseFloat(d[k]) || 0;
       };
       return d;
     });
@@ -104,25 +113,13 @@ d3.csv("raw_data.csv", function(raw_data) {
   // Extract the list of dimensions we want to keep in the plot.
   dimensions = d3
     .keys(raw_data[0])
-    .filter(function(d) { return d == "sentToGcss" 
-        || d == "sentToTpm"
-        || d == "scenarioSourceName"
-        || d == "issueTypeName"
-        || d == "locOrReg" 
-        || d == "suggestionShownInRerouter"
-        || d == "suggestionUsedInRerouter"
-        || d == "suggestionMatchGcssUpdate"
-        || d == "currentVariableCost"
-        || d == "suggestionVariableCost"
-        || d == "gcssVariableCost"
-        || d == "gcssHasCapacityForShipment"
-        || d == "numberOfFfes"})
+    .filter(function(d) { return isQualitative(d) || isQuantitative(d)})
 
   xscale.domain(dimensions.sort())
 
   // For each dim3nsion, build a scale
   dimensions.forEach(function(d) {
-    if(d == "currentVariableCost" || d == "suggestionVariableCost"|| d == "gcssVariableCost"|| d == "numberOfFfes"){
+    if( isQualitative(d) ){
       yscale[d] = d3.scale.linear()
         .domain( d3.extent(data, function(p) { return p[d]; }) )
         .range([h, 0])
@@ -258,7 +255,7 @@ function invert_axis(d) {
     var extent = yscale[d].brush.extent();
   }
   if (yscale[d].inverted == true) {
-    if(d == "currentVariableCost" || d == "suggestionVariableCost"|| d == "gcssVariableCost"|| d == "numberOfFfes"){
+    if( isQualitative(d) ){
       yscale[d].range([h, 0]);
     }else{
       yscale[d].rangePoints([h, 0], .1)
@@ -271,7 +268,7 @@ function invert_axis(d) {
     yscale[d].inverted = false;
 
   } else {
-    if(d == "currentVariableCost" || d == "suggestionVariableCost"|| d == "gcssVariableCost"|| d == "numberOfFfes"){
+    if( isQualitative(d) ){
       yscale[d].range([0, h]);
     }else{
       yscale[d].rangePoints([0, h], .1)
@@ -353,7 +350,7 @@ function brush() {
           .style('font-size', '13px')
           .style('display', function() { 
             var value = d3.select(this).data();
-            if(dimension == "currentVariableCost" || dimension == "suggestionVariableCost"|| dimension == "gcssVariableCost"|| dimension == "numberOfFfes")
+            if( isQualitative(dimension) )
               return extent[0] <= value && value <= extent[1] ? null : "none"
             else
               return extent[0] <= yscale[dimension](value[0]) && yscale[dimension](value[0]) <= extent[1] ? null : "none"
@@ -381,12 +378,9 @@ function brush() {
   // Get lines within extents
   var selected = [];
   data
-    .filter(function(d) {
-      return !_.contains(excluded_groups, d.group);
-    })
     .map(function(d) {
       return actives.every(function(p, dimension) {
-        if(p == "currentVariableCost" || p == "suggestionVariableCost"|| p == "gcssVariableCost"|| p == "numberOfFfes")
+        if( isQualitative(p) )
           return extents[dimension][0] <= d[p] && d[p] <= extents[dimension][1];
         else{
           return extents[dimension][0] <= yscale[p](d[p]) && yscale[p](d[p]) <= extents[dimension][1]
@@ -475,7 +469,7 @@ function rescale() {
   dimensions.forEach(function(d,i) {
     
     if (yscale[d].inverted) {
-      if(d == "currentVariableCost" || d == "suggestionVariableCost"|| d == "gcssVariableCost"|| d == "numberOfFfes"){
+      if( isQualitative(d) ){
         yscale[d] = d3.scale.linear()
         .domain( d3.extent(data, function(p) { return p[d]; }) )
         .range([0, h])
@@ -487,7 +481,7 @@ function rescale() {
       yscale[d].inverted = true;
 
     } else {
-      if(d == "currentVariableCost" || d == "suggestionVariableCost"|| d == "gcssVariableCost"|| d == "numberOfFfes"){
+      if( isQualitative(d) ){
         yscale[d] = d3.scale.linear()
         .domain( d3.extent(data, function(p) { return p[d]; }) )
         .range([h, 0])
@@ -513,9 +507,6 @@ function actives() {
   // filter extents and excluded groups
   var selected = [];
   data
-    .filter(function(d) {
-      return !_.contains(excluded_groups, d.group);
-    })
     .map(function(d) {
     return actives.every(function(p, i) {
       return extents[i][0] <= d[p] && d[p] <= extents[i][1];
@@ -547,20 +538,16 @@ window.onresize = function() {
     .select("g")
       .attr("transform", "translate(" + m[3] + "," + m[0] + ")");
   
-  xscale = d3.scale.ordinal().rangePoints([0, w], 1).domain(dimensions);
-  yscale["sentToGcss"].rangePoints([h, 0], .1)
-  yscale["sentToTpm"].rangePoints([h, 0], .1)
-  yscale["suggestionShownInRerouter"].rangePoints([h, 0], .1)
-  yscale["suggestionUsedInRerouter"].rangePoints([h, 0], .1)
-  yscale["suggestionMatchGcssUpdate"].rangePoints([h, 0], .1)
-  yscale["gcssHasCapacityForShipment"].rangePoints([h, 0], .1)
-  yscale["scenarioSourceName"].rangePoints([h, 0], .1)
-  yscale["issueTypeName"].rangePoints([h, 0], .1)
-  yscale["locOrReg"].rangePoints([h, 0], .1)
-  yscale["currentVariableCost"].range([h, 0])
-  yscale["suggestionVariableCost"].range([h, 0])
-  yscale["gcssVariableCost"].range([h, 0])
-  yscale["numberOfFfes"].range([h, 0])
+  // Rescale axes
+  xscale = d3.scale.ordinal()
+    .rangePoints([0, w], 1)
+    .domain(dimensions);
+  dimensions.forEach(function(d) {
+    if( isQualitative(d) ){
+      yscale[d].range([h, 0])
+    }else{
+      yscale[d].rangePoints([h, 0], .1)
+    }})
 
   d3.selectAll(".dimension")
     .attr("transform", function(d) { return "translate(" + xscale(d) + ")"; })
@@ -578,28 +565,6 @@ window.onresize = function() {
   brush();
 };
 
-// Remove all but selected from the dataset
-function keep_data() {
-  new_data = actives();
-  if (new_data.length == 0) {
-    alert("I don't mean to be rude, but I can't let you remove all the data.\n\nTry removing some brushes to get your data back. Then click 'Keep' when you've selected data you want to look closer at.");
-    return false;
-  }
-  data = new_data;
-  rescale();
-}
-
-// Exclude selected from the dataset
-function exclude_data() {
-  new_data = _.difference(data, actives());
-  if (new_data.length == 0) {
-    alert("I don't mean to be rude, but I can't let you remove all the data.\n\nTry selecting just a few data points then clicking 'Exclude'.");
-    return false;
-  }
-  data = new_data;
-  rescale();
-}
-
 function remove_axis(d,g) {
   dimensions = _.difference(dimensions, [d]);
   xscale.domain(dimensions);
@@ -607,12 +572,6 @@ function remove_axis(d,g) {
   g.filter(function(p) { return p == d; }).remove(); 
   update_ticks();
 }
-
-function hide_ticks() {
-  d3.selectAll(".axis g").style("display", "none");
-  //d3.selectAll(".axis path").style("display", "none");
-  d3.selectAll(".background").style("visibility", "hidden");
-};
 
 function show_ticks() {
   d3.selectAll(".axis g").style("display", null);
